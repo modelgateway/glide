@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"time"
 
-	"glide/pkg/providers/errs"
+	"glide/pkg/providers/clients"
 
 	"glide/pkg/api/schemas"
 	"go.uber.org/zap"
@@ -147,7 +147,7 @@ func (c *Client) doChatRequest(ctx context.Context, payload *ChatRequest) (*sche
 			zap.Any("headers", resp.Header),
 		)
 
-		return nil, errs.ErrProviderUnavailable
+		return nil, clients.ErrProviderUnavailable
 	}
 
 	// Read the response body into a byte slice

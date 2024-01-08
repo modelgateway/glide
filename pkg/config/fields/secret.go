@@ -1,6 +1,8 @@
 package fields
 
-import "encoding"
+import (
+	"encoding"
+)
 
 // Secret is a string that is marshaled in an opaque way, so we are not leaking sensitive information
 type Secret string

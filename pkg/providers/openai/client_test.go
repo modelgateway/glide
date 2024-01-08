@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"glide/pkg/providers/clients"
+
 	"glide/pkg/api/schemas"
 
 	"glide/pkg/telemetry"
@@ -46,10 +48,12 @@ func TestOpenAIClient_ChatRequest(t *testing.T) {
 	defer openAIServer.Close()
 
 	ctx := context.Background()
-	cfg := DefaultConfig()
-	cfg.BaseURL = openAIServer.URL
+	providerCfg := DefaultConfig()
+	clientCfg := clients.DefaultClientConfig()
 
-	client, err := NewClient(cfg, telemetry.NewTelemetryMock())
+	providerCfg.BaseURL = openAIServer.URL
+
+	client, err := NewClient(providerCfg, clientCfg, telemetry.NewTelemetryMock())
 	require.NoError(t, err)
 
 	request := schemas.UnifiedChatRequest{Message: schemas.ChatMessage{

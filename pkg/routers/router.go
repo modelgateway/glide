@@ -4,75 +4,50 @@ import (
 	"context"
 	"errors"
 
-	"glide/pkg/providers"
-	"go.uber.org/multierr"
+	"glide/pkg/routers/retry"
 	"go.uber.org/zap"
 
+	"glide/pkg/providers"
+
 	"glide/pkg/api/schemas"
+	"glide/pkg/routers/routing"
 	"glide/pkg/telemetry"
 )
 
-var ErrNoModels = errors.New("no models configured for router")
+var (
+	ErrNoModels         = errors.New("no models configured for router")
+	ErrNoModelAvailable = errors.New("could not handle request because all providers are not available")
+)
 
 type LangRouter struct {
+	routerID  string
 	Config    *LangRouterConfig
-	models    []providers.LanguageModel
+	routing   routing.LangModelRouting
+	retry     *retry.ExpRetry
+	models    []*providers.LangModel
 	telemetry *telemetry.Telemetry
 }
 
 func NewLangRouter(cfg *LangRouterConfig, tel *telemetry.Telemetry) (*LangRouter, error) {
-	router := &LangRouter{
-		Config:    cfg,
-		telemetry: tel,
+	models, err := cfg.BuildModels(tel)
+	if err != nil {
+		return nil, err
 	}
 
-	err := router.BuildModels(cfg.Models)
+	router := &LangRouter{
+		routerID:  cfg.ID,
+		Config:    cfg,
+		models:    models,
+		retry:     cfg.BuildRetry(),
+		routing:   routing.NewPriorityRouting(models),
+		telemetry: tel,
+	}
 
 	return router, err
 }
 
-func (r *LangRouter) BuildModels(modelConfigs []providers.LangModelConfig) error {
-	var errs error
-
-	if len(modelConfigs) == 0 {
-		return ErrNoModels
-	}
-
-	models := make([]providers.LanguageModel, 0, len(modelConfigs))
-
-	for _, modelConfig := range modelConfigs {
-		if !modelConfig.Enabled {
-			r.telemetry.Logger.Info(
-				"model is disabled, skipping",
-				zap.String("router", r.Config.ID),
-				zap.String("model", modelConfig.ID),
-			)
-
-			continue
-		}
-
-		r.telemetry.Logger.Debug(
-			"init lang model",
-			zap.String("router", r.Config.ID),
-			zap.String("model", modelConfig.ID),
-		)
-
-		model, err := modelConfig.ToModel(r.telemetry)
-		if err != nil {
-			errs = multierr.Append(errs, err)
-			continue
-		}
-
-		models = append(models, model)
-	}
-
-	if errs != nil {
-		return errs
-	}
-
-	r.models = models
-
-	return nil
+func (r *LangRouter) ID() string {
+	return r.routerID
 }
 
 func (r *LangRouter) Chat(ctx context.Context, request *schemas.UnifiedChatRequest) (*schemas.UnifiedChatResponse, error) {
@@ -80,6 +55,50 @@ func (r *LangRouter) Chat(ctx context.Context, request *schemas.UnifiedChatReque
 		return nil, ErrNoModels
 	}
 
-	// TODO: implement actual routing & fallback logic
-	return r.models[0].Chat(ctx, request)
+	retryIterator := r.retry.Iterator()
+
+	for retryIterator.HasNext() {
+		modelIterator := r.routing.Iterator()
+
+		for {
+			model, err := modelIterator.Next()
+
+			if errors.Is(err, routing.ErrNoHealthyModels) {
+				// no healthy model in the pool. Let's retry after some time
+				break
+			}
+
+			resp, err := model.Chat(ctx, request)
+			if err != nil {
+				r.telemetry.Logger.Warn(
+					"lang model failed processing chat request",
+					zap.String("routerID", r.ID()),
+					zap.String("modelID", model.ID()),
+					zap.String("provider", model.Provider()),
+					zap.Error(err),
+				)
+
+				continue
+			}
+
+			resp.Router = r.routerID
+
+			return resp, nil
+		}
+
+		// no providers were available to handle the request,
+		//  so we have to wait a bit with a hope there is some available next time
+		r.telemetry.Logger.Warn("no healthy model found, wait and retry", zap.String("routerID", r.ID()))
+
+		err := retryIterator.WaitNext(ctx)
+		if err != nil {
+			// something has cancelled the context
+			return nil, err
+		}
+	}
+
+	// if we reach this part, then we are in trouble
+	r.telemetry.Logger.Error("no model was available to handle request", zap.String("routerID", r.ID()))
+
+	return nil, ErrNoModelAvailable
 }

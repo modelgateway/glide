@@ -6,6 +6,16 @@ type UnifiedChatRequest struct {
 	MessageHistory []ChatMessage `json:"messageHistory"`
 }
 
+func NewChatFromStr(message string) *UnifiedChatRequest {
+	return &UnifiedChatRequest{
+		Message: ChatMessage{
+			"human",
+			message,
+			"roma",
+		},
+	}
+}
+
 // UnifiedChatResponse defines Glide's Chat Response Schema unified across all language models
 type UnifiedChatResponse struct {
 	ID            string           `json:"id,omitempty"`

@@ -44,7 +44,7 @@ run: ## Run Glide
 build: ## Build Glide
 	@go build -ldflags $(LDFLAGS_COMMON) -o ./dist/glide
 
-tests: ## Run tests
+test: ## Run tests
 	@go test -v -count=1 -race -shuffle=on -coverprofile=coverage.txt ./...
 
 docs-api: install-checkers ## Generate OpenAPI API docs

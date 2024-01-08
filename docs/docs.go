@@ -125,6 +125,14 @@ const docTemplate = `{
         }
     },
     "definitions": {
+        "clients.ClientConfig": {
+            "type": "object",
+            "properties": {
+                "timeout": {
+                    "type": "integer"
+                }
+            }
+        },
         "http.ErrorSchema": {
             "type": "object",
             "properties": {
@@ -231,16 +239,38 @@ const docTemplate = `{
                 "id"
             ],
             "properties": {
+                "client": {
+                    "$ref": "#/definitions/clients.ClientConfig"
+                },
                 "enabled": {
+                    "description": "Is the model enabled?",
                     "type": "boolean"
                 },
+                "error_budget": {
+                    "type": "string"
+                },
                 "id": {
+                    "description": "Model instance ID (unique in scope of the router)",
                     "type": "string"
                 },
                 "openai": {
                     "$ref": "#/definitions/openai.Config"
+                }
+            }
+        },
+        "retry.ExpRetryConfig": {
+            "type": "object",
+            "properties": {
+                "base_multiplier": {
+                    "type": "integer"
                 },
-                "timeout": {
+                "max_delay": {
+                    "type": "integer"
+                },
+                "max_retries": {
+                    "type": "integer"
+                },
+                "min_delay": {
                     "type": "integer"
                 }
             }
@@ -253,21 +283,46 @@ const docTemplate = `{
             ],
             "properties": {
                 "enabled": {
+                    "description": "Is router enabled?",
                     "type": "boolean"
                 },
                 "models": {
+                    "description": "the list of models that could handle requests",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/providers.LangModelConfig"
                     }
                 },
+                "retry": {
+                    "description": "retry when no healthy model is available to router",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/retry.ExpRetryConfig"
+                        }
+                    ]
+                },
                 "routers": {
+                    "description": "Unique router ID",
                     "type": "string"
                 },
                 "strategy": {
-                    "$ref": "#/definitions/strategy.RoutingStrategy"
+                    "description": "strategy on picking the next model to serve the request",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/routing.Strategy"
+                        }
+                    ]
                 }
             }
+        },
+        "routing.Strategy": {
+            "type": "string",
+            "enum": [
+                "priority"
+            ],
+            "x-enum-varnames": [
+                "Priority"
+            ]
         },
         "schemas.ChatMessage": {
             "type": "object",
@@ -356,15 +411,6 @@ const docTemplate = `{
                     "type": "string"
                 }
             }
-        },
-        "strategy.RoutingStrategy": {
-            "type": "string",
-            "enum": [
-                "priority"
-            ],
-            "x-enum-varnames": [
-                "Priority"
-            ]
         }
     }
 }`

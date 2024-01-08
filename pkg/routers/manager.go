@@ -3,9 +3,6 @@ package routers
 import (
 	"errors"
 
-	"go.uber.org/multierr"
-	"go.uber.org/zap"
-
 	"glide/pkg/telemetry"
 )
 
@@ -20,48 +17,25 @@ type RouterManager struct {
 
 // NewManager creates a new instance of Router Manager that creates, holds and returns all routers
 func NewManager(cfg *Config, tel *telemetry.Telemetry) (*RouterManager, error) {
-	manager := RouterManager{
-		Config:    cfg,
-		telemetry: tel,
+	langRouters, err := cfg.BuildLangRouters(tel)
+	if err != nil {
+		return nil, err
 	}
 
-	err := manager.BuildRouters(cfg.LanguageRouters)
+	langRouterMap := make(map[string]*LangRouter, len(langRouters))
+
+	for _, router := range langRouters {
+		langRouterMap[router.ID()] = router
+	}
+
+	manager := RouterManager{
+		Config:        cfg,
+		telemetry:     tel,
+		langRouters:   langRouters,
+		langRouterMap: &langRouterMap,
+	}
 
 	return &manager, err
-}
-
-func (r *RouterManager) BuildRouters(routerConfigs []LangRouterConfig) error {
-	routerMap := make(map[string]*LangRouter, len(routerConfigs))
-	routers := make([]*LangRouter, 0, len(routerConfigs))
-
-	var errs error
-
-	for idx, routerConfig := range routerConfigs {
-		if !routerConfig.Enabled {
-			r.telemetry.Logger.Info("router is disabled, skipping", zap.String("routerID", routerConfig.ID))
-			continue
-		}
-
-		r.telemetry.Logger.Debug("init router", zap.String("routerID", routerConfig.ID))
-
-		router, err := NewLangRouter(&routerConfigs[idx], r.telemetry)
-		if err != nil {
-			errs = multierr.Append(errs, err)
-			continue
-		}
-
-		routerMap[routerConfig.ID] = router
-		routers = append(routers, router)
-	}
-
-	if errs != nil {
-		return errs
-	}
-
-	r.langRouterMap = &routerMap
-	r.langRouters = routers
-
-	return nil
 }
 
 func (r *RouterManager) GetLangRouters() []*LangRouter {

@@ -100,7 +100,7 @@ jobs:
         run: go test -v -count=1 -race -shuffle=on -coverprofile=coverage.txt ./...
 
       - name: Test
-        run: make tests
+        run: make test
 
       - name: Upload Coverage
         uses: codecov/codecov-action@v3

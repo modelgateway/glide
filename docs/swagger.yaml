@@ -1,5 +1,10 @@
 basePath: /
 definitions:
+  clients.ClientConfig:
+    properties:
+      timeout:
+        type: integer
+    type: object
   http.ErrorSchema:
     properties:
       message:
@@ -68,33 +73,63 @@ definitions:
     type: object
   providers.LangModelConfig:
     properties:
+      client:
+        $ref: '#/definitions/clients.ClientConfig'
       enabled:
+        description: Is the model enabled?
         type: boolean
+      error_budget:
+        type: string
       id:
+        description: Model instance ID (unique in scope of the router)
         type: string
       openai:
         $ref: '#/definitions/openai.Config'
-      timeout:
-        type: integer
     required:
     - id
+    type: object
+  retry.ExpRetryConfig:
+    properties:
+      base_multiplier:
+        type: integer
+      max_delay:
+        type: integer
+      max_retries:
+        type: integer
+      min_delay:
+        type: integer
     type: object
   routers.LangRouterConfig:
     properties:
       enabled:
+        description: Is router enabled?
         type: boolean
       models:
+        description: the list of models that could handle requests
         items:
           $ref: '#/definitions/providers.LangModelConfig'
         type: array
+      retry:
+        allOf:
+        - $ref: '#/definitions/retry.ExpRetryConfig'
+        description: retry when no healthy model is available to router
       routers:
+        description: Unique router ID
         type: string
       strategy:
-        $ref: '#/definitions/strategy.RoutingStrategy'
+        allOf:
+        - $ref: '#/definitions/routing.Strategy'
+        description: strategy on picking the next model to serve the request
     required:
     - models
     - routers
     type: object
+  routing.Strategy:
+    enum:
+    - priority
+    type: string
+    x-enum-varnames:
+    - Priority
   schemas.ChatMessage:
     properties:
       content:
@@ -156,12 +191,6 @@ definitions:
       router:
         type: string
     type: object
-  strategy.RoutingStrategy:
-    enum:
-    - priority
-    type: string
-    x-enum-varnames:
-    - Priority
 host: localhost:9099
 info:
   contact:
